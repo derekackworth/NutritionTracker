@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">NutritionTracker</string>
+    <string name="add_product_from_camera">Add Product From Camera</string>
+    <string name="add_product_from_image">Add Product From Image</string>
+    <string name="your_nutrition">Your Nutrition</string>
+    <string name="clear_all_products">Clear All Products</string>
+    <string name="clear_selected_products">Clear Selected Date\'s Products</string>
+    <string name="go_back">Go Back</string>
+    <string name="today">Today</string>
+    <string name="last_7_days">Last 7 Days</string>
+    <string name="last_30_days">Last 30 Days</string>
+    <string name="left_button">Left Button</string>
+    <string name="right_button">Right Button</string>
+</resources>
