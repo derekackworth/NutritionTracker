@@ -1,17 +1,15 @@
 package com.example.derekackworth.nutritiontracker;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.FileProvider;
 import android.Manifest;
+import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
-import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -24,13 +22,17 @@ import android.widget.Button;
 import android.widget.CalendarView;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import com.google.android.gms.tasks.OnFailureListener;
-import com.google.android.gms.tasks.OnSuccessListener;
-import com.google.android.gms.tasks.Task;
-import com.google.firebase.ml.vision.FirebaseVision;
-import com.google.firebase.ml.vision.common.FirebaseVisionImage;
-import com.google.firebase.ml.vision.text.FirebaseVisionText;
-import com.google.firebase.ml.vision.text.FirebaseVisionTextRecognizer;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
+import androidx.exifinterface.media.ExifInterface;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -44,6 +46,8 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -54,19 +58,20 @@ public class MainActivity extends AppCompatActivity
     private String currentPhotoPath;
     private ArrayList<String> nutrientGs;
     private HashMap<Date, NutritionFacts> nutrientsHashMap = new HashMap<>();
+
     private static final String[] nutrients =
-            {
-                    "Calories", "Fat", "Saturated", "Trans", "Cholesterol",
-                    "Sodium", "Carbohydrate", "Fibre", "Sugars", "Protein"
-            };
+    {
+            "Calories", "Fat", "Saturated", "Trans", "Cholesterol",
+            "Sodium", "Carbohydrate", "Fibre", "Sugars", "Protein"
+    };
+
     private static final String[] appPermissions =
-            {
-                    Manifest.permission.READ_EXTERNAL_STORAGE,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE
-            };
+    {
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
+    };
+
     private static final int REQUEST_PERMISSIONS = 1;
-    private static final int REQUEST_CAMERA = 2;
-    private static final int REQUEST_IMAGE = 3;
     private static final String TAG = "MainActivity";
 
     @Override
@@ -77,7 +82,7 @@ public class MainActivity extends AppCompatActivity
 
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE)
         {
-            getSupportActionBar().hide();
+            Objects.requireNonNull(getSupportActionBar()).hide();
         }
 
         if (!arePermissionsEnabled())
@@ -86,25 +91,23 @@ public class MainActivity extends AppCompatActivity
         }
 
         cvCalendar = findViewById(R.id.cvCalendar);
-        cvCalendar.setOnDateChangeListener(new CalendarView.OnDateChangeListener() {
-            @Override
-            public void onSelectedDayChange(CalendarView view, int year, int month, int day)
-            {
-                Calendar cal = Calendar.getInstance();
-                cal.set(Calendar.YEAR, year);
-                cal.set(Calendar.MONTH, month);
-                cal.set(Calendar.DAY_OF_MONTH, day);
-                cal.set(Calendar.HOUR_OF_DAY, 0);
-                cal.set(Calendar.MINUTE, 0);
-                cal.set(Calendar.SECOND, 0);
-                cal.set(Calendar.MILLISECOND, 0);
-                cvCalendar.setDate(cal.getTime().getTime());
-            }
+        cvCalendar.setOnDateChangeListener((view, year, month, day) ->
+        {
+            Calendar cal = Calendar.getInstance();
+            cal.set(Calendar.YEAR, year);
+            cal.set(Calendar.MONTH, month);
+            cal.set(Calendar.DAY_OF_MONTH, day);
+            cal.set(Calendar.HOUR_OF_DAY, 0);
+            cal.set(Calendar.MINUTE, 0);
+            cal.set(Calendar.SECOND, 0);
+            cal.set(Calendar.MILLISECOND, 0);
+            cvCalendar.setDate(cal.getTime().getTime());
         });
     }
 
     @Override
-    protected void onPause() {
+    protected void onPause()
+    {
         super.onPause();
 
         try
@@ -121,14 +124,17 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    protected void onResume() {
+    protected void onResume()
+    {
         super.onResume();
 
         try
         {
             FileInputStream fis = openFileInput("data");
             ObjectInputStream ois = new ObjectInputStream(fis);
+
             nutrientsHashMap = (HashMap<Date, NutritionFacts>) ois.readObject();
             ois.close();
             fis.close();
@@ -147,26 +153,21 @@ public class MainActivity extends AppCompatActivity
     {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
 
-        if (intent.resolveActivity(getPackageManager()) != null)
+        try
         {
-            File photoFile = null;
-
-            try
-            {
-                photoFile = createImageFile();
-            }
-            catch (IOException e)
-            {
-                Log.e(TAG, "Error creating image file.", e);
-            }
-
-
-            if (photoFile != null)
-            {
-                Uri photoURI = FileProvider.getUriForFile(this, "com.example.android.fileprovider", photoFile);
-                intent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
-                startActivityForResult(intent, REQUEST_CAMERA);
-            }
+            File photoFile;
+            photoFile = createImageFile();
+            Uri photoURI = FileProvider.getUriForFile(this, "com.example.derekackworth.nutritiontracker.android.fileprovider", photoFile);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, photoURI);
+            requestCameraResultLauncher.launch(intent);
+        }
+        catch (ActivityNotFoundException e)
+        {
+            Log.e(TAG, "Activity not fund.", e);
+        }
+        catch (IOException e)
+        {
+            Log.e(TAG, "Error creating image file.", e);
         }
     }
 
@@ -176,7 +177,7 @@ public class MainActivity extends AppCompatActivity
         intent.setType("image/*");
         String[] mimeTypes = {"image/jpeg", "image/png"};
         intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-        startActivityForResult(intent, REQUEST_IMAGE);
+        requestImageResultLauncher.launch(intent);
     }
 
     public void onClearAllClick(View view)
@@ -186,7 +187,7 @@ public class MainActivity extends AppCompatActivity
 
     public void onClearSelectedClick(View view)
     {
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
         Date currentDate = null;
 
         try
@@ -202,15 +203,15 @@ public class MainActivity extends AppCompatActivity
         {
             if (nutrientsHashMap.containsKey(currentDate))
             {
-                nutrientsHashMap.get(currentDate).calories = 0;
-                nutrientsHashMap.get(currentDate).fat = 0;
-                nutrientsHashMap.get(currentDate).saturatedAndTrans = 0;
-                nutrientsHashMap.get(currentDate).cholesterol = 0;
-                nutrientsHashMap.get(currentDate).sodium = 0;
-                nutrientsHashMap.get(currentDate).carbs = 0;
-                nutrientsHashMap.get(currentDate).fibre = 0;
-                nutrientsHashMap.get(currentDate).sugars = 0;
-                nutrientsHashMap.get(currentDate).protein = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).calories = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).fat = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).saturatedAndTrans = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).cholesterol = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).sodium = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).carbs = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).fibre = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).sugars = 0;
+                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).protein = 0;
             }
         }
     }
@@ -246,19 +247,22 @@ public class MainActivity extends AppCompatActivity
             }
         }
 
-        requestPermissions(remainingPermissions.toArray(new String[remainingPermissions.size()]), REQUEST_PERMISSIONS);
+        requestPermissions(remainingPermissions.toArray(new String[0]), REQUEST_PERMISSIONS);
     }
 
     private File createImageFile() throws IOException
     {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
         String imageFileName = "JPEG_" + timeStamp + "_";
         File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File image = File.createTempFile(
-                imageFileName, /* prefix */
-                ".jpg",  /* suffix */
-                storageDir     /* directory */
+
+        File image = File.createTempFile
+        (
+            imageFileName, /* prefix */
+            ".jpg",  /* suffix */
+            storageDir     /* directory */
         );
+
         currentPhotoPath = image.getAbsolutePath();
         return image;
     }
@@ -266,114 +270,84 @@ public class MainActivity extends AppCompatActivity
     private void getProductNutritionFacts(Bitmap bm)
     {
         nutrientGs = new ArrayList<>();
-        FirebaseVisionImage image = FirebaseVisionImage.fromBitmap(bm);
-        FirebaseVisionTextRecognizer detector = FirebaseVision.getInstance().getOnDeviceTextRecognizer();
-        Task<FirebaseVisionText> result = detector.processImage(image)
-                        .addOnSuccessListener(new OnSuccessListener<FirebaseVisionText>()
-                        {
-                            @Override
-                            public void onSuccess(FirebaseVisionText firebaseVisionText)
-                            {
-
-                                for (FirebaseVisionText.TextBlock tb : firebaseVisionText.getTextBlocks())
-                                {
-                                    for (FirebaseVisionText.Line line : tb.getLines())
-                                    {
-                                        if (stringContainsItemFromList(line.getText(), nutrients) != -1 &&
-                                                line.getText().matches(".*\\d.*"))
-                                        {
-                                            nutrientGs.add(line.getText());
-                                        }
-                                    }
-                                }
+        InputImage image = InputImage.fromBitmap(bm, 0);
+        TextRecognizer detector = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        detector.process(image).addOnSuccessListener(t ->
+        {
+            for (Text.TextBlock tb : t.getTextBlocks())
+            {
+                for (Text.Line line : tb.getLines())
+                {
+                    if (stringContainsItemFromList(line.getText(), nutrients) != -1 && line.getText().matches(".*\\d.*"))
+                    {
+                        nutrientGs.add(line.getText());
+                    }
+                }
+            }
 
 
-                                if (nutrientGs.size() != 0)
-                                {
-                                    input = new EditText(MainActivity.this);
-                                    input.setInputType(InputType.TYPE_CLASS_NUMBER);
-                                    AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this)
-                                            .setMessage("How many servings of this product?")
-                                            .setView(input)
-                                            .setPositiveButton("Ok", new DialogInterface.OnClickListener()
-                                            {
-                                                @Override
-                                                public void onClick(DialogInterface dialog, int which)
-                                                {
-                                                    dialog.dismiss();
-                                                    filterNutrientsToHashMap();
-                                                }
-                                            })
-                                            .setNegativeButton("Cancel", new DialogInterface.OnClickListener()
-                                            {
-                                                @Override
-                                                public void onClick(DialogInterface dialog, int which)
-                                                {
-                                                    dialog.dismiss();
-                                                }
-                                            });
+            if (nutrientGs.size() != 0)
+            {
+                input = new EditText(MainActivity.this);
+                input.setInputType(InputType.TYPE_CLASS_NUMBER);
 
-                                    AlertDialog alert = builder.create();
-                                    alert.show();
-                                    Button pButton = alert.getButton(DialogInterface.BUTTON_POSITIVE);
-                                    LinearLayout.LayoutParams positiveParams = new LinearLayout.LayoutParams(
-                                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                                            LinearLayout.LayoutParams.WRAP_CONTENT
-                                    );
-                                    positiveParams.setMargins(10,0,0,0);
-                                    pButton.setLayoutParams(positiveParams);
-                                    Button nButton = alert.getButton(DialogInterface.BUTTON_NEGATIVE);
-                                    LinearLayout.LayoutParams negativeParams = new LinearLayout.LayoutParams(
-                                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                                            LinearLayout.LayoutParams.WRAP_CONTENT
-                                    );
-                                    negativeParams.setMargins(0,0,10,0);
-                                    nButton.setLayoutParams(negativeParams);
-                                }
-                                else
-                                {
-                                    AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this)
-                                            .setMessage("No nutrition facts found")
-                                            .setPositiveButton("Ok", new DialogInterface.OnClickListener()
-                                            {
-                                                @Override
-                                                public void onClick(DialogInterface dialog, int which)
-                                                {
-                                                    dialog.dismiss();
-                                                }
-                                            });
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this)
+                    .setMessage("How many servings of this product?")
+                    .setView(input)
+                    .setPositiveButton("Ok", (dialog, which) ->
+                    {
+                        dialog.dismiss();
+                        filterNutrientsToHashMap();
+                    })
+                    .setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
 
-                                    AlertDialog alert = builder.create();
-                                    alert.show();
-                                }
-                            }
-                        })
-                        .addOnFailureListener(
-                                new OnFailureListener()
-                                {
-                                    @Override
-                                    public void onFailure(@NonNull Exception e)
-                                    {
-                                        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this)
-                                                .setMessage("No nutrition facts found")
-                                                .setPositiveButton("Ok", new DialogInterface.OnClickListener()
-                                                {
-                                                    @Override
-                                                    public void onClick(DialogInterface dialog, int which)
-                                                    {
-                                                        dialog.dismiss();
-                                                    }
-                                                });
+                AlertDialog alert = builder.create();
+                alert.show();
+                Button pButton = alert.getButton(DialogInterface.BUTTON_POSITIVE);
 
-                                        AlertDialog alert = builder.create();
-                                        alert.show();
-                                    }
-                                });
+                LinearLayout.LayoutParams positiveParams = new LinearLayout.LayoutParams
+                (
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+
+                positiveParams.setMargins(10,0,0,0);
+                pButton.setLayoutParams(positiveParams);
+                Button nButton = alert.getButton(DialogInterface.BUTTON_NEGATIVE);
+
+                LinearLayout.LayoutParams negativeParams = new LinearLayout.LayoutParams
+                (
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+
+                negativeParams.setMargins(0,0,10,0);
+                nButton.setLayoutParams(negativeParams);
+            }
+            else
+            {
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this)
+                    .setMessage("No nutrition facts found")
+                    .setPositiveButton("Ok", (dialog, which) -> dialog.dismiss());
+
+                AlertDialog alert = builder.create();
+                alert.show();
+            }
+
+        }).addOnFailureListener(e ->
+        {
+            AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this)
+                .setMessage("No nutrition facts found")
+                .setPositiveButton("Ok", (dialog, which) -> dialog.dismiss());
+
+            AlertDialog alert = builder.create();
+            alert.show();
+        });
     }
 
     private void filterNutrientsToHashMap()
     {
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
         Date currentDate = null;
 
         try
@@ -403,9 +377,9 @@ public class MainActivity extends AppCompatActivity
                         if (indexOfRegex("\\d", num) != -1)
                         {
                             num = num.substring(indexOfRegex("\\d", num));
-                            nutrientsHashMap.get(currentDate).calories +=
-                                    Integer.parseInt(input.getText().toString()) *
-                                            Integer.parseInt(num);
+                            Objects.requireNonNull(nutrientsHashMap.get(currentDate)).calories +=
+                                Integer.parseInt(input.getText().toString()) *
+                                Integer.parseInt(num);
                         }
                     }
                     catch (NumberFormatException e)
@@ -421,7 +395,7 @@ public class MainActivity extends AppCompatActivity
                     {
                         num = num.substring(indexOfRegex("\\d", num));
 
-                        if (num.indexOf(" ") != -1)
+                        if (num.contains(" "))
                         {
                             num = num.substring(0, num.indexOf(" "));
                         }
@@ -435,8 +409,8 @@ public class MainActivity extends AppCompatActivity
 
                             try
                             {
-                                nutrientsHashMap.get(currentDate).fat +=
-                                        ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).fat +=
+                                    ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
                             }
                             catch (NumberFormatException e)
                             {
@@ -449,8 +423,8 @@ public class MainActivity extends AppCompatActivity
 
                             try
                             {
-                                nutrientsHashMap.get(currentDate).saturatedAndTrans +=
-                                        ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).saturatedAndTrans +=
+                                    ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
                             }
                             catch (NumberFormatException e)
                             {
@@ -463,8 +437,8 @@ public class MainActivity extends AppCompatActivity
 
                             try
                             {
-                                nutrientsHashMap.get(currentDate).cholesterol +=
-                                        ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).cholesterol +=
+                                    ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
                             }
                             catch (NumberFormatException e)
                             {
@@ -477,8 +451,8 @@ public class MainActivity extends AppCompatActivity
 
                             try
                             {
-                                nutrientsHashMap.get(currentDate).sodium +=
-                                        ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).sodium +=
+                                    ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
                             }
                             catch (NumberFormatException e)
                             {
@@ -491,8 +465,8 @@ public class MainActivity extends AppCompatActivity
 
                             try
                             {
-                                nutrientsHashMap.get(currentDate).carbs +=
-                                        ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).carbs +=
+                                    ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
                             }
                             catch (NumberFormatException e)
                             {
@@ -505,8 +479,8 @@ public class MainActivity extends AppCompatActivity
 
                             try
                             {
-                                nutrientsHashMap.get(currentDate).fibre +=
-                                        ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).fibre +=
+                                    ((Integer.parseInt(input.getText().toString()) * Double.parseDouble(num)) / dailyValue) * 100;
                             }
                             catch (NumberFormatException e)
                             {
@@ -517,8 +491,8 @@ public class MainActivity extends AppCompatActivity
                         {
                             try
                             {
-                                nutrientsHashMap.get(currentDate).sugars +=
-                                        Integer.parseInt(input.getText().toString()) * Double.parseDouble(num);
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).sugars +=
+                                    Integer.parseInt(input.getText().toString()) * Double.parseDouble(num);
                             }
                             catch (NumberFormatException e)
                             {
@@ -529,8 +503,8 @@ public class MainActivity extends AppCompatActivity
                         {
                             try
                             {
-                                nutrientsHashMap.get(currentDate).protein +=
-                                        Integer.parseInt(input.getText().toString()) * Double.parseDouble(num);
+                                Objects.requireNonNull(nutrientsHashMap.get(currentDate)).protein +=
+                                    Integer.parseInt(input.getText().toString()) * Double.parseDouble(num);
                             }
                             catch (NumberFormatException e)
                             {
@@ -543,6 +517,7 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static int indexOfRegex(String regex, String s)
     {
         Pattern pattern = Pattern.compile(regex);
@@ -550,6 +525,7 @@ public class MainActivity extends AppCompatActivity
         return matcher.find() ? matcher.start() : -1;
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static int stringContainsItemFromList(String inputStr, String[] items)
     {
         for(int i = 0; i < items.length; i++)
@@ -584,87 +560,83 @@ public class MainActivity extends AppCompatActivity
                     if (shouldShowRequestPermissionRationale(permissions[i]))
                     {
                         AlertDialog.Builder builder = new AlertDialog.Builder(this)
-                                .setMessage("This app needs permissions to work without errors.")
-                                .setPositiveButton("Yes, grant permissions", new DialogInterface.OnClickListener()
-                                {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which)
-                                    {
-                                        dialog.dismiss();
-                                        requestMultiplePermissions();
-                                    }
-                                })
-                                .setNegativeButton("No, exit app", new DialogInterface.OnClickListener()
-                                {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which)
-                                    {
-                                        dialog.dismiss();
-                                        finish();
-                                    }
-                                })
-                                .setCancelable(false);
+                            .setMessage("This app needs permissions to work without errors.")
+                            .setPositiveButton("Yes, grant permissions", (dialog, which) ->
+                            {
+                                dialog.dismiss();
+                                requestMultiplePermissions();
+                            })
+                            .setNegativeButton("No, exit app", (dialog, which) ->
+                            {
+                                dialog.dismiss();
+                                finish();
+                            })
+                            .setCancelable(false);
 
                         AlertDialog alert = builder.create();
                         alert.show();
                         Button pButton = alert.getButton(DialogInterface.BUTTON_POSITIVE);
-                        LinearLayout.LayoutParams positiveParams = new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT
+
+                        LinearLayout.LayoutParams positiveParams = new LinearLayout.LayoutParams
+                        (
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
                         );
+
                         positiveParams.setMargins(10,0,0,0);
                         pButton.setLayoutParams(positiveParams);
                         Button nButton = alert.getButton(DialogInterface.BUTTON_NEGATIVE);
-                        LinearLayout.LayoutParams negativeParams = new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT
+
+                        LinearLayout.LayoutParams negativeParams = new LinearLayout.LayoutParams
+                        (
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
                         );
+
                         negativeParams.setMargins(0,0,10,0);
                         nButton.setLayoutParams(negativeParams);
                     }
                     else
                     {
                         AlertDialog.Builder builder = new AlertDialog.Builder(this)
-                                .setMessage("You have denied some permissions." +
-                                        "Allow all permissions at [App Settings] > [Permissions].")
-                                .setPositiveButton("Go to settings", new DialogInterface.OnClickListener()
-                                {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which)
-                                    {
-                                        dialog.dismiss();
-                                        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                                Uri.fromParts("package", getPackageName(), null));
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                        startActivity(intent);
-                                        finish();
-                                    }
-                                })
-                                .setNegativeButton("No, exit app", new DialogInterface.OnClickListener()
-                                {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which)
-                                    {
-                                        dialog.dismiss();
-                                        finish();
-                                    }
-                                })
-                                .setCancelable(false);
+                            .setMessage("You have denied some permissions." +
+                                    "Allow all permissions at [App Settings] > [Permissions].")
+                            .setPositiveButton("Go to settings", (dialog, which) ->
+                            {
+                                dialog.dismiss();
+                                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", getPackageName(), null));
+                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                startActivity(intent);
+                                finish();
+                            })
+                            .setNegativeButton("No, exit app", (dialog, which) ->
+                            {
+                                dialog.dismiss();
+                                finish();
+                            })
+                            .setCancelable(false);
 
                         AlertDialog alert = builder.create();
                         alert.show();
                         Button pButton = alert.getButton(DialogInterface.BUTTON_POSITIVE);
-                        LinearLayout.LayoutParams positiveParams = new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT
+
+                        LinearLayout.LayoutParams positiveParams = new LinearLayout.LayoutParams
+                        (
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
                         );
+
                         positiveParams.setMargins(10,0,0,0);
                         pButton.setLayoutParams(positiveParams);
                         Button nButton = alert.getButton(DialogInterface.BUTTON_NEGATIVE);
-                        LinearLayout.LayoutParams negativeParams = new LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT
+
+                        LinearLayout.LayoutParams negativeParams = new LinearLayout.LayoutParams
+                        (
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
                         );
+
                         negativeParams.setMargins(0,0,10,0);
                         nButton.setLayoutParams(negativeParams);
 
@@ -676,63 +648,71 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data)
-    {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == REQUEST_CAMERA && resultCode == RESULT_OK)
+    ActivityResultLauncher<Intent> requestCameraResultLauncher = registerForActivityResult(
+        new ActivityResultContracts.StartActivityForResult(), result ->
         {
-            File file = new File(currentPhotoPath);
-
-            try
+            if (result.getResultCode() == Activity.RESULT_OK)
             {
-                ExifInterface ei = new ExifInterface(currentPhotoPath);
-                int orientation = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
-                Bitmap bmOriginal = MediaStore.Images.Media.getBitmap(getContentResolver(), Uri.fromFile(file));
-                Bitmap bmRotated = null;
+                File file = new File(currentPhotoPath);
 
-                switch(orientation)
+                try
                 {
-                    case ExifInterface.ORIENTATION_ROTATE_90:
-                        bmRotated = rotateImage(bmOriginal, 90);
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_180:
-                        bmRotated = rotateImage(bmOriginal, 180);
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_270:
-                        bmRotated = rotateImage(bmOriginal, 270);
-                        break;
-                    case ExifInterface.ORIENTATION_NORMAL:
-                    default:
-                        bmRotated = bmOriginal;
+                    ExifInterface ei = new ExifInterface(currentPhotoPath);
+                    int orientation = ei.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED);
+                    Bitmap bmOriginal = MediaStore.Images.Media.getBitmap(getContentResolver(), Uri.fromFile(file));
+                    Bitmap bmRotated;
+
+                    switch(orientation)
+                    {
+                        case ExifInterface.ORIENTATION_ROTATE_90:
+                            bmRotated = rotateImage(bmOriginal, 90);
+                            break;
+                        case ExifInterface.ORIENTATION_ROTATE_180:
+                            bmRotated = rotateImage(bmOriginal, 180);
+                            break;
+                        case ExifInterface.ORIENTATION_ROTATE_270:
+                            bmRotated = rotateImage(bmOriginal, 270);
+                            break;
+                        case ExifInterface.ORIENTATION_NORMAL:
+                        default:
+                            bmRotated = bmOriginal;
+                    }
+
+                    if (bmRotated != null)
+                    {
+                        getProductNutritionFacts(bmRotated);
+                    }
                 }
-
-                if (bmRotated != null)
-                    getProductNutritionFacts(bmRotated);
-            }
-            catch (IOException e)
-            {
-                Log.e(TAG, "Error creating bitmap.", e);
-            }
-        }
-        else if (requestCode == REQUEST_IMAGE && resultCode == RESULT_OK)
-        {
-            Uri image = data.getData();
-
-            try
-            {
-                Bitmap bm = MediaStore.Images.Media.getBitmap(getContentResolver(), image);
-
-                if (bm != null)
+                catch (IOException e)
                 {
-                    getProductNutritionFacts(bm);
+                    Log.e(TAG, "Error creating bitmap.", e);
                 }
             }
-            catch (IOException e)
+        }
+    );
+
+    ActivityResultLauncher<Intent> requestImageResultLauncher = registerForActivityResult(
+        new ActivityResultContracts.StartActivityForResult(), result ->
+        {
+            if (result.getResultCode() == Activity.RESULT_OK)
             {
-                Log.e(TAG, "Error creating bitmap.", e);
+                Intent data = result.getData();
+                Uri image = Objects.requireNonNull(data).getData();
+
+                try
+                {
+                    Bitmap bm = MediaStore.Images.Media.getBitmap(getContentResolver(), image);
+
+                    if (bm != null)
+                    {
+                        getProductNutritionFacts(bm);
+                    }
+                }
+                catch (IOException e)
+                {
+                    Log.e(TAG, "Error creating bitmap.", e);
+                }
             }
         }
-    }
+    );
 }

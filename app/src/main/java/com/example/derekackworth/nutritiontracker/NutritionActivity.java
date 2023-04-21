@@ -19,6 +19,8 @@ import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
+import java.util.Objects;
 
 public class NutritionActivity extends AppCompatActivity
 {
@@ -27,6 +29,7 @@ public class NutritionActivity extends AppCompatActivity
     private HashMap<Date, NutritionFacts> nutrientsHashMap = new HashMap<>();
     private static final String TAG = "NutritionActivity";
 
+    @SuppressWarnings("unchecked")
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
@@ -35,7 +38,7 @@ public class NutritionActivity extends AppCompatActivity
 
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE)
         {
-            getSupportActionBar().hide();
+            Objects.requireNonNull(getSupportActionBar()).hide();
         }
 
         tvTime = findViewById(R.id.tvTime);
@@ -46,15 +49,15 @@ public class NutritionActivity extends AppCompatActivity
 
     public void onLeftClick(View view)
     {
-        if (tvTime.getText().toString() == getString(R.string.today))
+        if (Objects.equals(tvTime.getText().toString(), getString(R.string.today)))
         {
             tvTime.setText(getString(R.string.last_30_days));
         }
-        else if (tvTime.getText().toString() == getString(R.string.last_7_days))
+        else if (Objects.equals(tvTime.getText().toString(), getString(R.string.last_7_days)))
         {
             tvTime.setText(getString(R.string.today));
         }
-        else if (tvTime.getText().toString() == getString(R.string.last_30_days))
+        else if (Objects.equals(tvTime.getText().toString(), getString(R.string.last_30_days)))
         {
             tvTime.setText(getString(R.string.last_7_days));
         }
@@ -64,15 +67,15 @@ public class NutritionActivity extends AppCompatActivity
 
     public void onRightClick(View view)
     {
-        if (tvTime.getText().toString() == getString(R.string.today))
+        if (Objects.equals(tvTime.getText().toString(), getString(R.string.today)))
         {
             tvTime.setText(getString(R.string.last_7_days));
         }
-        else if (tvTime.getText().toString() == getString(R.string.last_7_days))
+        else if (Objects.equals(tvTime.getText().toString(), getString(R.string.last_7_days)))
         {
             tvTime.setText(getString(R.string.last_30_days));
         }
-        else if (tvTime.getText().toString() == getString(R.string.last_30_days))
+        else if (Objects.equals(tvTime.getText().toString(), getString(R.string.last_30_days)))
         {
             tvTime.setText(getString(R.string.today));
         }
@@ -88,7 +91,7 @@ public class NutritionActivity extends AppCompatActivity
     private void loadNutrients()
     {
         String s = "";
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
         Date currentDate = null;
 
         try
@@ -106,11 +109,11 @@ public class NutritionActivity extends AppCompatActivity
             DecimalFormat df = new DecimalFormat("#.##");
             int days = 1;
 
-            if (tvTime.getText().toString() == getString(R.string.last_7_days))
+            if (Objects.equals(tvTime.getText().toString(), getString(R.string.last_7_days)))
             {
                 days = 7;
             }
-            else if (tvTime.getText().toString() == getString(R.string.last_30_days))
+            else if (Objects.equals(tvTime.getText().toString(), getString(R.string.last_30_days)))
             {
                 days = 30;
             }
@@ -119,15 +122,15 @@ public class NutritionActivity extends AppCompatActivity
             {
                 if (nutrientsHashMap.containsKey(currentDate))
                 {
-                    facts.calories += nutrientsHashMap.get(currentDate).calories;
-                    facts.fat += nutrientsHashMap.get(currentDate).fat;
-                    facts.saturatedAndTrans += nutrientsHashMap.get(currentDate).saturatedAndTrans;
-                    facts.cholesterol += nutrientsHashMap.get(currentDate).cholesterol;
-                    facts.sodium += nutrientsHashMap.get(currentDate).sodium;
-                    facts.carbs += nutrientsHashMap.get(currentDate).carbs;
-                    facts.fibre += nutrientsHashMap.get(currentDate).fibre;
-                    facts.sugars += nutrientsHashMap.get(currentDate).sugars;
-                    facts.protein += nutrientsHashMap.get(currentDate).protein;
+                    facts.calories += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).calories;
+                    facts.fat += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).fat;
+                    facts.saturatedAndTrans += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).saturatedAndTrans;
+                    facts.cholesterol += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).cholesterol;
+                    facts.sodium += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).sodium;
+                    facts.carbs += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).carbs;
+                    facts.fibre += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).fibre;
+                    facts.sugars += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).sugars;
+                    facts.protein += Objects.requireNonNull(nutrientsHashMap.get(currentDate)).protein;
                 }
 
                 currentDate = addSubtractDays(currentDate, -1);
@@ -156,6 +159,7 @@ public class NutritionActivity extends AppCompatActivity
         tvNutrients.setText(s);
     }
 
+    @SuppressWarnings("SameParameterValue")
     private static Date addSubtractDays(Date date, int days)
     {
         Calendar cal = Calendar.getInstance();

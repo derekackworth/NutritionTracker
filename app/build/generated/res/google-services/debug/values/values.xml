@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="default_web_client_id" translatable="false">148272007479-kog1v67arajgve32fnqhd7tnmr0f543q.apps.googleusercontent.com</string>
+    <string name="firebase_database_url" translatable="false">https://nutritiontracker-9b6af.firebaseio.com</string>
+    <string name="gcm_defaultSenderId" translatable="false">148272007479</string>
+    <string name="google_api_key" translatable="false">AIzaSyANA3hNQGllYbJKdzTPzAa4_VYuL1sG4SY</string>
+    <string name="google_app_id" translatable="false">1:148272007479:android:aed9f2ee6516480592f2b2</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyANA3hNQGllYbJKdzTPzAa4_VYuL1sG4SY</string>
+    <string name="google_storage_bucket" translatable="false">nutritiontracker-9b6af.appspot.com</string>
+    <string name="project_id" translatable="false">nutritiontracker-9b6af</string>
+</resources>
